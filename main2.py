@@ -10,10 +10,10 @@ SERVER = "http://102.202.45.215:3000/api"
 KEY = "msk_ecc04e1e6a96eab47729954d8ae716d8e3d5024a5bbcf4eb"
 LLM_URL = "http://10.0.4.15:4000/v1"
 LLM_KEY = "sk-R59HRWsZ1HM4UV5prc7Jxw"
-MODEL = "Qwen3.8-Flash-Next"
+MODEL = "qwen3.8-27b"
 REPEATS = 1
-QUESTION = "dens-002"
-ANSWER = "dens-002-a05"
+QUESTION = None
+ANSWER = None
 
 H = {"Authorization": f"Bearer {KEY}"}
 
