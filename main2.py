@@ -15,6 +15,11 @@ REPEATS = 1
 QUESTION = None
 ANSWER = None
 
+CUSTOM_ANSWERS = [
+    {"questionId": "dens-001", "lines": {"b": "density = mass / volume = 50 / 20 = 2.5 g/cm3"}},
+    {"questionId": "dens-002", "lines": {"b": "148 / 16.6 = 8.9", "c": "it sinks because its density is bigger than water"}},
+]
+
 H = {"Authorization": f"Bearer {KEY}"}
 
 
@@ -43,6 +48,9 @@ if ANSWER:
 else:
     answers = requests.get(f"{SERVER}/answers", headers=H, params=params).json()["answers"]
 
+for c in CUSTOM_ANSWERS:
+    answers.append({"id": None, "questionId": c["questionId"], "lines": c["lines"]})
+
 questions, schemes = {}, {}
 for a in answers:
     qid = a["questionId"]
@@ -60,7 +68,7 @@ for repeat in range(1, REPEATS + 1):
         prompt = (
             "You are an IGCSE Physics examiner. Mark the student's answer against the mark scheme.\n"
             "Reply only with one line per marking point, like 'b.1: 1', then 'REASON: ...'.\n\n"
-            "In case the student gets the result right, he gets full mark independent of having wrong steps, mainly when it is a calculus question.\n"
+            "In case the student gets the result right, he gets full mark of all the steps independent of having wrong steps, mainly when it is a calculus question.\n"
             + q["stem"] + "\n\n"
             + "\n\n".join(
                 f"PART {l['label']} ({l['marks']} marks): {l['text']}\nMARK SCHEME:\n"
@@ -85,13 +93,17 @@ for repeat in range(1, REPEATS + 1):
             if len(marks) == len(points[l["label"]]):
                 lines[l["label"]] = {"marks": marks, "total": min(sum(marks), l["marks"])}
 
-        result = {"answerId": a["id"], "repeat": repeat, "prompt": prompt, "rawOutput": reply}
+        result = {"repeat": repeat, "prompt": prompt, "rawOutput": reply}
+        if a["id"]:
+            result["answerId"] = a["id"]
+        else:
+            result["customAnswer"] = {"questionId": a["questionId"], "lines": a["lines"]}
         if len(lines) == len(parts):
             result["lines"] = lines
         else:
             result["parseFailed"] = True
         sent = requests.post(f"{SERVER}/runs/{run_id}/results", headers=H, json=result).json()
-        print(a["id"], repeat, lines or "unreadable", sent.get("error", ""))
+        print(a["id"] or f"custom {a['questionId']}", repeat, lines or "unreadable", sent.get("error", ""))
 
 # 4. close the run, show the score
 requests.post(f"{SERVER}/runs/{run_id}/close", headers=H)

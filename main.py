@@ -15,6 +15,12 @@ REPEATS = 1
 QUESTION = None
 ANSWER = None
 
+
+CUSTOM_ANSWERS = [
+    {"questionId": "dens-001", "lines": {"b": "density = mass / volume = 50 / 20 = 2.5 g/cm3"}},
+    {"questionId": "dens-002", "lines": {"b": "148 / 16.6 = 8.9", "c": "it sinks because its density is bigger than water"}},
+]
+
 H = {"Authorization": f"Bearer {KEY}"}
 
 
@@ -44,6 +50,9 @@ if ANSWER:
 else:
     answers = requests.get(f"{SERVER}/answers", headers=H, params=params).json()["answers"]
 
+for c in CUSTOM_ANSWERS:
+    answers.append({"id": None, "questionId": c["questionId"], "lines": c["lines"]})
+
 questions = {}
 for a in answers:
     if a["questionId"] not in questions:
@@ -72,13 +81,17 @@ for repeat in range(1, REPEATS + 1):
             if m:
                 lines[l["label"]] = {"total": min(int(m.group(1)), l["marks"])}
 
-        result = {"answerId": a["id"], "repeat": repeat, "prompt": prompt, "rawOutput": reply}
+        result = {"repeat": repeat, "prompt": prompt, "rawOutput": reply}
+        if a["id"]:
+            result["answerId"] = a["id"]
+        else:
+            result["customAnswer"] = {"questionId": a["questionId"], "lines": a["lines"]}
         if len(lines) == len(parts):
             result["lines"] = lines
         else:
             result["parseFailed"] = True
         sent = requests.post(f"{SERVER}/runs/{run_id}/results", headers=H, json=result).json()
-        print(a["id"], repeat, lines or "unreadable", sent.get("error", ""))
+        print(a["id"] or f"custom {a['questionId']}", repeat, lines or "unreadable", sent.get("error", ""))
 
 # 4. close the run, show the score
 requests.post(f"{SERVER}/runs/{run_id}/close", headers=H)
