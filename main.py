@@ -20,7 +20,8 @@ H = {"Authorization": f"Bearer {KEY}"}
 
 def ask_model(prompt):
     r = requests.post(f"{LLM_URL}/chat/completions", headers={"Authorization": f"Bearer {LLM_KEY}"},
-                      json={"model": MODEL, "messages": [{"role": "user", "content": prompt}], "temperature": 0}, timeout=300)
+                      json={"model": MODEL, "messages": [{"role": "user", "content": prompt}], "temperature": 0,
+                            "max_tokens": 2048}, timeout=300)
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"] or ""
 
@@ -48,8 +49,7 @@ for a in answers:
     if a["questionId"] not in questions:
         questions[a["questionId"]] = requests.get(f"{SERVER}/questions/{a['questionId']}", headers=H, params={"runId": run_id}).json()["question"]
 
-# 3. mark each answer with the model
-results = []
+# 3. mark each answer with the model, and send each result straight away
 for repeat in range(1, REPEATS + 1):
     for a in answers:
         q = questions[a["questionId"]]
@@ -60,7 +60,11 @@ for repeat in range(1, REPEATS + 1):
             + q["stem"] + "\n\n"
             + "\n\n".join(f"PART {l['label']} ({l['marks']} marks): {l['text']}\nSTUDENT: {a['lines'][l['label']]}" for l in parts)
         )
-        reply = ask_model(prompt)
+        try:
+            reply = ask_model(prompt)
+        except requests.RequestException as e:
+            print(a["id"], repeat, "model error:", e)
+            reply = f"MODEL ERROR: {e}"
 
         lines = {}
         for l in parts:
@@ -73,12 +77,10 @@ for repeat in range(1, REPEATS + 1):
             result["lines"] = lines
         else:
             result["parseFailed"] = True
-        results.append(result)
-        print(a["id"], repeat, lines or "unreadable")
+        sent = requests.post(f"{SERVER}/runs/{run_id}/results", headers=H, json=result).json()
+        print(a["id"], repeat, lines or "unreadable", sent.get("error", ""))
 
-# 4. send the results, close the run, show the score
-sent = requests.post(f"{SERVER}/runs/{run_id}/results", headers=H, json={"results": results}).json()
-print("stored", sent.get("stored"), sent.get("error", ""))
+# 4. close the run, show the score
 requests.post(f"{SERVER}/runs/{run_id}/close", headers=H)
 score = requests.get(f"{SERVER}/runs/{run_id}/score", headers=H).json()
 print("exact total agreement:", score["overall"]["exactTotalAgreement"])
